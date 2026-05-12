@@ -1,0 +1,33 @@
+// Copyright (C) 2026 Patryk Wójcik (gpl-3.0-or-later)
+driver {
+    name           = ornwater
+    meter_type     = WaterMeter
+    default_fields = name,id,status,total_m3,target_m3,timestamp
+    detect {
+        mvt = ORN,01,07
+    }
+    library {
+        use = status-tpl-only
+        use = total_m3
+    }
+    fields {
+        field {
+            name     = target
+            quantity = Volume
+            info     = 'Target volume at billing period.'
+            match {
+                measurement_type = Instantaneous
+                vif_range        = Volume
+                tariff_nr        = 1
+            }
+        }
+    }
+    tests {
+        test {
+            args     = 'myornwater ornwater 75052169 0000000000000000000000000000000000'
+            telegram = 1E444E3E6921057501077A1680100567BB39D0C9C661AADEA768CE2C44B2CA
+            json     = '{"_":"telegram","media":"water","meter":"ornwater","name":"myornwater","id":"75052169","status":"UNKNOWN_80","total_m3":0.005,"target_m3":0.114,"timestamp":"1111-11-11T11:11:11Z"}'
+            fields   = 'myornwater;75052169;UNKNOWN_80;0.005;0.114;1111-11-11 11:11.11'
+        }
+    }
+}

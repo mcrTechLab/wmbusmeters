@@ -1040,6 +1040,7 @@ X(ONS,MANFCODE('O','N','S'),"ONUR Elektroteknik, Turkey")\
 X(OPT,MANFCODE('O','P','T'),"Optec, Switzerland")\
 X(ORB,MANFCODE('O','R','B'),"ORBIS Tecnologia Electrica, Spain")\
 X(ORM,MANFCODE('O','R','M'),"Ormazabal, Spain")\
+X(ORN,MANFCODE('O','R','N'),"Orno, Poland")\
 X(OSA,MANFCODE('O','S','A'),"Osaki Electric Europe, Japan")\
 X(OSB,MANFCODE('O','S','B'),"Ocea Smart Building, France")\
 X(OSC,MANFCODE('O','S','C'),"Oriental Sales Corporation, India")\
@@ -2581,6 +2582,7 @@ X(ZZZ,MANFCODE('Z','Z','Z'),"Michael Rac, Germany")\
 #define MANUFACTURER_OPT MANFCODE('O','P','T')
 #define MANUFACTURER_ORB MANFCODE('O','R','B')
 #define MANUFACTURER_ORM MANFCODE('O','R','M')
+#define MANUFACTURER_ORN MANFCODE('O','R','N')
 #define MANUFACTURER_OSA MANFCODE('O','S','A')
 #define MANUFACTURER_OSB MANFCODE('O','S','B')
 #define MANUFACTURER_OSC MANFCODE('O','S','C')
