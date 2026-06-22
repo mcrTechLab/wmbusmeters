@@ -18,11 +18,10 @@
 #ifndef DRIVERS_H_
 #define DRIVERS_H_
 
-#include<string>
+#include "always.h"
 
-#include"meters.h"
-
-typedef unsigned char uchar;
+#include <cstdint>
+#include <string>
 
 struct BuiltinDriver
 {
@@ -32,15 +31,28 @@ struct BuiltinDriver
     bool loaded;
 };
 
+struct MVT
+{
+    uint16_t mfct;
+    uchar version;
+    uchar type;
+};
+
 struct MapToDriver {
     MVT mvt;
     const char *name;
 };
+
+struct Configuration;
 
 void prepareBuiltinDrivers();
 void loadDriversFromDir(std::string dir);
 bool loadBuiltinDriver(std::string driver_name);
 const char *findBuiltinDriver(uint16_t mfct, uchar ver, uchar type);
 void removeBuiltinDriver(std::string driver_name);
+// Builtin drivers are normally loaded on demand when the first telegram arrives.
+// The function below wastes a lot of time, use it only for list_drivers and when
+// starting a long running socket server.
+void forceLoadAllDrivers(Configuration *config);
 
 #endif

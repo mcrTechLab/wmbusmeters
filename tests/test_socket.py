@@ -165,7 +165,7 @@ TEST_CASES = [
             "total_m3": 6.408,
         },
     ),
-    # 11. List drivers command
+    # 11. List drivers command temporarily disabled.
     (
         "list_drivers command",
         {

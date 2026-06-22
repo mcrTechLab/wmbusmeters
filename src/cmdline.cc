@@ -20,6 +20,9 @@
 #include"meters.h"
 #include"util.h"
 
+#include "utils/download.h"
+#include "utils/fs.h"
+
 #include<cstring>
 #include<string>
 #include<unistd.h>
@@ -100,8 +103,7 @@ void enableEarlyLoggingFromCommandLine(int argc, char **argv)
             continue;
         }
         if (!strncmp(argv[i], "--basicauth=", 12) && strlen(argv[i]) > 12) {
-            string ba = argv[i]+12;
-            setBasicAuth(ba);
+            setBasicAuth(argv[i]+12);
             i++;
             continue;
         }
@@ -601,15 +603,15 @@ static shared_ptr<Configuration> parseNormalCommandLine(Configuration *c, int ar
             i++;
             continue;
         }
-        if (!strncmp(argv[i], "--listmeters=", 13)) {
-            c->list_meters = true;
-            c->list_meters_search = string(argv[i]+13);
+        if (!strncmp(argv[i], "--listdrivers=", 13)) {
+            c->list_drivers = true;
+            c->list_drivers_search = string(argv[i]+13);
             i++;
             continue;
         }
-        else if (!strncmp(argv[i], "--listmeters", 12)) {
-            c->list_meters = true;
-            c->list_meters_search = "";
+        else if (!strncmp(argv[i], "--listdrivers", 12)) {
+            c->list_drivers = true;
+            c->list_drivers_search = "";
             i++;
             continue;
         }
@@ -746,7 +748,7 @@ static shared_ptr<Configuration> parseNormalCommandLine(Configuration *c, int ar
         c->use_auto_device_detect == false &&
         !c->list_shell_envs &&
         !c->list_fields &&
-        !c->list_meters &&
+        !c->list_drivers &&
         !c->list_units &&
         !c->print_driver)
     {
@@ -890,17 +892,17 @@ shared_ptr<Configuration> parseCommandLineWithUseConfig(Configuration *c, int ar
             i++;
             continue;
         }
-        if (!strncmp(argv[i], "--listmeters=", 13))
+        if (!strncmp(argv[i], "--listdrivers=", 13))
         {
-            c->overrides.listmeters_override = string(argv[i]+13);
-            debug("(useconfig) listmeters override \"%s\"\n", c->overrides.listmeters_override.c_str());
+            c->overrides.listdrivers_override = string(argv[i]+13);
+            debug("(useconfig) listdrivers override \"%s\"\n", c->overrides.listdrivers_override.c_str());
             i++;
             continue;
         }
-        if (!strncmp(argv[i], "--listmeters", 12))
+        if (!strncmp(argv[i], "--listdrivers", 12))
         {
-            c->overrides.listmeters_override = "!";
-            debug("(useconfig) listmeters override\n");
+            c->overrides.listdrivers_override = "!";
+            debug("(useconfig) listdrivers override\n");
             i++;
             continue;
         }
@@ -937,7 +939,7 @@ shared_ptr<Configuration> parseCommandLineWithUseConfig(Configuration *c, int ar
         }
 
         error(EXIT_USAGE_ERROR, "Usage error: --useconfig=... can only be used in combination with:\n"
-              "--overridedevice= --listento= --listmeters= --listfields= --exitafter= --oneshot= --logfile= --silent --normal --verbose --debug --trace\n");
+              "--overridedevice= --listento= --listdrivers= --listfields= --exitafter= --oneshot= --logfile= --silent --normal --verbose --debug --trace\n");
         break;
     }
 

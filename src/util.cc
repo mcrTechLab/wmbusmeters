@@ -21,17 +21,16 @@
 #include"shell.h"
 #include"version.h"
 
+#include "utils/fs.h"
+
 #include<algorithm>
 #include<assert.h>
 #include<dirent.h>
 #include<errno.h>
 #include<fcntl.h>
 #include<functional>
-#include<grp.h>
-#include<pwd.h>
 #include<math.h>
 #include<set>
-#include<signal.h>
 #include<stdarg.h>
 #include<stddef.h>
 #include<string.h>
@@ -48,94 +47,6 @@
 #endif
 
 using namespace std;
-
-// Sigint, sigterm will call the exit handler.
-function<void()> exit_handler_;
-
-bool got_hupped_ {};
-
-bool internal_testing_enabled_ = false;
-
-void exitHandler(int signum)
-{
-    got_hupped_ = signum == SIGHUP;
-    if (exit_handler_) exit_handler_();
-}
-
-bool gotHupped()
-{
-    return got_hupped_;
-}
-
-pthread_t wake_me_up_on_sig_chld_ {};
-
-void wakeMeUpOnSigChld(pthread_t t)
-{
-    wake_me_up_on_sig_chld_ = t;
-}
-
-void doNothing(int signum)
-{
-}
-
-void signalMyself(int signum)
-{
-    if (wake_me_up_on_sig_chld_)
-    {
-        if (signalsInstalled())
-        {
-            pthread_kill(wake_me_up_on_sig_chld_, SIGUSR1);
-        }
-    }
-}
-
-struct sigaction old_int, old_hup, old_term, old_chld, old_usr1, old_usr2;
-
-void onExit(function<void()> cb)
-{
-    exit_handler_ = cb;
-    struct sigaction new_action;
-
-    new_action.sa_handler = exitHandler;
-    sigemptyset (&new_action.sa_mask);
-    new_action.sa_flags = 0;
-
-    sigaction(SIGINT, &new_action, &old_int);
-    sigaction(SIGHUP, &new_action, &old_hup);
-    sigaction(SIGTERM, &new_action, &old_term);
-
-    new_action.sa_handler = signalMyself;
-    sigemptyset (&new_action.sa_mask);
-    new_action.sa_flags = 0;
-    sigaction(SIGCHLD, &new_action, &old_chld);
-
-    new_action.sa_handler = doNothing;
-    sigemptyset (&new_action.sa_mask);
-    new_action.sa_flags = 0;
-    sigaction(SIGUSR1, &new_action, &old_usr1);
-
-    new_action.sa_handler = doNothing;
-    sigemptyset (&new_action.sa_mask);
-    new_action.sa_flags = 0;
-    sigaction(SIGUSR2, &new_action, &old_usr2);
-}
-
-bool signalsInstalled()
-{
-    return exit_handler_ != NULL;
-}
-
-void restoreSignalHandlers()
-{
-    exit_handler_ = NULL;
-
-    sigaction(SIGINT, &old_int, NULL);
-    sigaction(SIGHUP, &old_hup, NULL);
-    sigaction(SIGTERM, &old_term, NULL);
-    sigaction(SIGCHLD, &old_chld, NULL);
-    sigaction(SIGUSR1, &old_usr1, NULL);
-    sigaction(SIGUSR2, &old_usr2, NULL);
-}
 
 int char2int(char input)
 {
@@ -371,6 +282,8 @@ string format3fdot3f(double v)
     return r;
 }
 
+bool internal_testing_enabled_ = false;
+
 void internalTestingEnabled(bool b)
 {
     internal_testing_enabled_ = b;
@@ -447,81 +360,6 @@ void incrementIV(uchar *iv, size_t len) {
     }
 }
 
-bool checkCharacterDeviceExists(const char *tty, bool fail_if_not)
-{
-    struct stat info;
-
-    int rc = stat(tty, &info);
-    if (rc != 0) {
-        if (fail_if_not) {
-            error(EXIT_DEVICE_ERROR, "Device \"%s\" does not exist.\n", tty);
-        } else {
-            return false;
-        }
-    }
-    if (!S_ISCHR(info.st_mode)) {
-        if (fail_if_not) {
-            error(EXIT_DEVICE_ERROR, "Device %s is not a character device.\n", tty);
-        } else {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool checkFileExists(const char *file)
-{
-    struct stat info;
-
-    int rc = stat(file, &info);
-    if (rc != 0) {
-        return false;
-    }
-    if (!S_ISREG(info.st_mode)) {
-        return false;
-    }
-    return true;
-}
-
-bool checkIfSimulationFile(const char *file)
-{
-    if (!checkFileExists(file))
-    {
-        return false;
-    }
-    const char *filename = strrchr(file, '/');
-    if (filename) {
-        filename++;
-    } else {
-        filename = file;
-    }
-    if (filename < file) filename = file;
-    if (strncmp(filename, "simulation", 10)) {
-        return false;
-    }
-    return true;
-}
-
-bool checkIfDirExists(const char *dir)
-{
-    struct stat info;
-
-    int rc = stat(dir, &info);
-    if (rc != 0) {
-        return false;
-    }
-    if (!S_ISDIR(info.st_mode)) {
-        return false;
-    }
-    if (info.st_mode & S_IWUSR &&
-        info.st_mode & S_IRUSR &&
-        info.st_mode & S_IXUSR) {
-        // Check the directory is writeable.
-        return true;
-    }
-    return false;
-}
-
 string eatTo(vector<uchar> &v, vector<uchar>::iterator &i, int c, size_t max, bool *eof, bool *err)
 {
     string s;
@@ -588,123 +426,6 @@ int parseTime(const string& s)
     }
     int n = atoi(time.c_str());
     return n*mul;
-}
-
-bool listFiles(const string& dir, vector<string> *files)
-{
-    DIR *dp = NULL;
-    struct dirent *dptr = NULL;
-
-    if (NULL == (dp = opendir(dir.c_str())))
-    {
-        return false;
-    }
-    while(NULL != (dptr = ::readdir(dp)))
-    {
-        if (!strcmp(dptr->d_name,".") ||
-            !strcmp(dptr->d_name,".."))
-        {
-            // Ignore . ..  dirs.
-            continue;
-        }
-        size_t len = strlen(dptr->d_name);
-        if (len > 0 && dptr->d_name[len-1] == '~')
-        {
-            // Ignore emacs backup files ending in ~
-            continue;
-        }
-        files->push_back(string(dptr->d_name));
-    }
-    closedir(dp);
-
-    return true;
-}
-
-int loadFile(const string& file, vector<string> *lines)
-{
-    char block[32768+1];
-    vector<uchar> buf;
-
-    int fd = open(file.c_str(), O_RDONLY);
-    if (fd == -1) {
-        return -1;
-    }
-    while (true) {
-        ssize_t n = read(fd, block, sizeof(block));
-        if (n == -1) {
-            if (errno == EINTR) {
-                continue;
-            }
-            error(EXIT_FILE_ERROR, "Could not read file %s errno=%d\n", file.c_str(), errno);
-            close(fd);
-            return -1;
-        }
-        buf.insert(buf.end(), block, block+n);
-        if (n < (ssize_t)sizeof(block)) {
-            break;
-        }
-    }
-    close(fd);
-
-    bool eof, err;
-    auto i = buf.begin();
-    for (;;) {
-        string line = eatTo(buf, i, '\n', 32768, &eof, &err);
-        if (err) {
-            error(EXIT_FILE_ERROR, "Error parsing simulation file.\n");
-        }
-        if (line.length() > 0) {
-            lines->push_back(line);
-        }
-        if (eof) break;
-    }
-
-    return 0;
-}
-
-bool loadFile(const string& file, vector<char> *buf)
-{
-    int blocksize = 1024;
-    char block[blocksize];
-
-    int fd = open(file.c_str(), O_RDONLY);
-    if (fd == -1) {
-        warning("Could not open file %s errno=%d\n", file.c_str(), errno);
-        return false;
-    }
-    while (true) {
-        ssize_t n = read(fd, block, sizeof(block));
-        if (n == -1) {
-            if (errno == EINTR) {
-                continue;
-            }
-            warning("Could not read file %s errno=%d\n", file.c_str(), errno);
-            close(fd);
-
-            return false;
-        }
-        buf->insert(buf->end(), block, block+n);
-        if (n < (ssize_t)sizeof(block)) {
-            break;
-        }
-    }
-    close(fd);
-    return true;
-}
-
-bool appendFile(const string &file, const string &line)
-{
-    int fd = open(file.c_str(), O_WRONLY|O_APPEND|O_CREAT, 0644);
-    if (fd >= 0)
-    {
-        ssize_t l = write(fd, line.c_str(), line.length());
-        if (l != (ssize_t)line.length()) return false;
-        l = write(fd, "\n", 1);
-        if (l != 1) return false;
-        close(fd);
-        return true;
-    }
-    return false;
 }
 
 string eatToSkipWhitespace(vector<char> &v, vector<char>::iterator &i, int c, size_t max, bool *eof, bool *err)
@@ -894,73 +615,6 @@ double addYears(double t, int y)
 void addYears(struct tm *date, int y)
 {
     return addMonths(date, 12*y);
-}
-
-const char* toString(AccessCheck ac)
-{
-    switch (ac)
-    {
-    case AccessCheck::NoSuchDevice: return "NoSuchDevice";
-    case AccessCheck::NoProperResponse: return "NoProperResponse";
-    case AccessCheck::NoPermission: return "NoPermission";
-    case AccessCheck::NotSameGroup: return "NotSameGroup";
-    case AccessCheck::AccessOK: return "AccessOK";
-    }
-    return "?";
-}
-
-AccessCheck checkIfExistsAndHasAccess(const string& device)
-{
-    struct stat device_sb;
-
-    int ok = stat(device.c_str(), &device_sb);
-
-    // The file did not exist.
-    if (ok) return AccessCheck::NoSuchDevice;
-
-    int r = access(device.c_str(), R_OK);
-    int w = access(device.c_str(), W_OK);
-    if (r == 0 && w == 0)
-    {
-        // We have read and write access!
-        return AccessCheck::AccessOK;
-    }
-
-    // We are not permitted to read and write to this tty. Why?
-    // Lets check the group settings.
-
-#if defined(__APPLE__) && defined(__MACH__)
-        int my_groups[256];
-#else
-        gid_t my_groups[256];
-#endif
-    int ngroups = 256;
-
-    struct passwd *p = getpwuid(getuid());
-
-    // What are the groups I am member of?
-    int rc = getgrouplist(p->pw_name, p->pw_gid, my_groups, &ngroups);
-    if (rc < 0) {
-        error(EXIT_PERMISSION_ERROR, "(wmbusmeters) cannot handle users with more than 256 groups\n");
-    }
-
-    // What is the group of the tty?
-    struct group *device_group = getgrgid(device_sb.st_gid);
-
-    // Go through my groups to see if the device's group is in there.
-    for (int i=0; i<ngroups; ++i)
-    {
-        if (my_groups[i] == device_group->gr_gid)
-        {
-            // We belong to the same group as the tty. Typically dialout.
-            // Then there is some other reason for the lack of access.
-            return AccessCheck::NoPermission;
-        }
-    }
-    // We have examined all the groups that we belong to and yet not
-    // found the device's group. We can at least conclude that we
-    // being in the device's group would help, ie dialout.
-    return AccessCheck::NotSameGroup;
 }
 
 int countSetBits(int v)
@@ -1263,49 +917,6 @@ bool isInsideTimePeriod(time_t now, string periods)
     return false;
 }
 
-size_t memoryUsage()
-{
-    return 0;
-}
-
-vector<string> alarm_shells_;
-
-const char* toString(Alarm type)
-{
-    switch (type)
-    {
-    case Alarm::DeviceFailure: return "DeviceFailure";
-    case Alarm::RegularResetFailure: return "RegularResetFailure";
-    case Alarm::DeviceInactivity: return "DeviceInactivity";
-    case Alarm::SpecifiedDeviceNotFound: return "SpecifiedDeviceNotFound";
-    }
-    return "?";
-}
-
-void logAlarm(Alarm type, string info)
-{
-    vector<string> envs;
-    string ts = toString(type);
-    envs.push_back("ALARM_TYPE="+ts);
-
-    string msg = tostrprintf("[ALARM %s] %s", ts.c_str(), info.c_str());
-    envs.push_back("ALARM_MESSAGE="+msg);
-
-    warning("%s\n", msg.c_str());
-
-    for (auto &s : alarm_shells_)
-    {
-        vector<string> args;
-        args.push_back("-c");
-        args.push_back(s);
-        invokeShell("/bin/sh", args, envs);
-    }
-}
-
-void setAlarmShells(vector<string> &alarm_shells)
-{
-    alarm_shells_ = alarm_shells;
-}
 
 bool stringFoundCaseIgnored(const string& h, const string& n)
 {
@@ -1668,117 +1279,6 @@ string binaryAsciiSafeToString(const string& v)
     return safeString(bytes);
 }
 
-#define SLIP_END             0xc0    /* indicates end of packet */
-#define SLIP_ESC             0xdb    /* indicates byte stuffing */
-#define SLIP_ESC_END         0xdc    /* ESC ESC_END means END data byte */
-#define SLIP_ESC_ESC         0xdd    /* ESC ESC_ESC means ESC data byte */
-
-bool slipAllEND(vector<uchar>& msg)
-{
-    for (size_t i = 0; i < msg.size(); ++i)
-    {
-        uchar c = msg[i];
-        if (c != SLIP_END) return false;
-    }
-    return true;
-}
-
-ssize_t slipFrameSize(vector<uchar>& msg)
-{
-    size_t i;
-
-    // Skip any leading 0xc0, they do not count.
-    for (i = 0; i < msg.size(); ++i)
-    {
-        uchar c = msg[i];
-        if (c != SLIP_END) break;
-    }
-
-    size_t from = i;
-    for (; i < msg.size(); ++i)
-    {
-        uchar c = msg[i];
-        if (c == SLIP_END) return (ssize_t)(i-from);
-    }
-    return -1;
-}
-
-void addSlipFraming(vector<uchar>& from, vector<uchar> &to)
-{
-    to.push_back(SLIP_END);
-    for (uchar c : from)
-    {
-        if (c == SLIP_END)
-        {
-            to.push_back(SLIP_ESC);
-            to.push_back(SLIP_ESC_END);
-        }
-        else if (c == SLIP_ESC)
-        {
-            to.push_back(SLIP_ESC);
-            to.push_back(SLIP_ESC_ESC);
-        }
-        else
-        {
-            to.push_back(c);
-        }
-    }
-    to.push_back(SLIP_END);
-}
-
-void removeSlipFraming(vector<uchar>& from, size_t *frame_length, vector<uchar> &to)
-{
-    *frame_length = 0;
-    to.clear();
-    to.reserve(from.size());
-    bool esc = false;
-    size_t i;
-    bool found_end = false;
-
-    // Skip any leading C0:s aka SLIP_ENDs.
-    for (i = 0; i < from.size(); ++i)
-    {
-        uchar c = from[i];
-        if (c != SLIP_END) break;
-    }
-
-    for (; i < from.size(); ++i)
-    {
-        uchar c = from[i];
-        if (c == SLIP_END)
-        {
-            found_end = true;
-            i++;
-            break;
-        }
-        else if (c == SLIP_ESC)
-        {
-            esc = true;
-        }
-        else if (esc)
-        {
-            esc = false;
-            if (c == SLIP_ESC_END) to.push_back(SLIP_END);
-            else if (c == SLIP_ESC_ESC) to.push_back(SLIP_ESC);
-            else to.push_back(c); // This is an error......
-        }
-        else
-        {
-            to.push_back(c);
-        }
-    }
-
-    if (found_end)
-    {
-        *frame_length = i;
-    }
-    else
-    {
-        *frame_length = 0;
-        to.clear();
-    }
-}
-
 // Check if hex string is likely to be ascii
 bool isLikelyAscii(const string& v)
 {
@@ -1954,141 +1454,4 @@ bool is_lowercase_alpha_num_underscore(const char *text)
 bool endsWith(const std::string& str, const std::string& suffix)
 {
     return str.size() >= suffix.size() && 0 == str.compare(str.size()-suffix.size(), suffix.size(), suffix);
-}
-
-string lang_;
-
-const std::string &language()
-{
-    if (lang_.length() > 0) return lang_;
-
-    const char *la = getenv("LANG");
-    if (!la || strlen(la) < 2)
-    {
-        lang_ = "en";
-    }
-    else
-    {
-        if (la[2] == '_' || la[2] == 0)
-        {
-            lang_ = string(la, la+2);
-        }
-        else
-        {
-            lang_ = "en";
-        }
-    }
-
-    return lang_;
-}
-
-TestBit toTestBit(const char *s)
-{
-    if (!strcmp(s, "Set")) return TestBit::Set;
-    if (!strcmp(s, "NotSet")) return TestBit::NotSet;
-    return TestBit::Unknown;
-}
-
-string basic_auth_cred_ {};
-
-void setBasicAuth(const std::string& cred)
-{
-    basic_auth_cred_ = cred;
-}
-
-bool no_network_ {};
-
-void setNoNetwork(bool v)
-{
-    no_network_ = v;
-}
-
-char download_dir_[256] = {0};
-
-void setDownloadDir(const char *dir)
-{
-    assert(strlen(dir) < sizeof(download_dir_));
-    strcpy(download_dir_, dir);
-}
-
-const char *downloadDir()
-{
-    if (download_dir_[0]) return download_dir_;
-
-    const char *home = getenv("HOME");
-    snprintf(download_dir_, 256, "%s/.local/share/wmbusmeters/wmbusmeters.drivers.d", home);
-    return download_dir_;
-}
-
-int download(const char *suffix, const char *file, const char *local_file)
-{
-    bool exists = false;
-
-    FILE *f = fopen(local_file, "rb");
-    if (f)
-    {
-        // Already downloaded.
-        fclose(f);
-        exists = true;
-    }
-
-    // Not in download dir, download...
-    // curl https://wmbusmeters.org/drivers/iperl.xmq
-    char url[256];
-    snprintf(url, 256, "https://wmbusmeters.org/drivers/%s%s", file, suffix);
-
-    if (no_network_)
-    {
-        if (exists)
-        {
-            verbose("(driver) using cache for %s (no network access)\n", file);
-            return 304;
-        }
-        warning("(driver) no driver %s found in cache and no network access\n", file);
-        return -1;
-    }
-
-    vector<string> args;
-    args.push_back("-s");
-    args.push_back("--fail");
-    args.push_back("--create-dirs");
-    args.push_back("-R");
-    args.push_back("--write-out");
-    args.push_back("%{http_code}");
-    if (basic_auth_cred_.length() > 0)
-    {
-        args.push_back("-u");
-        args.push_back(basic_auth_cred_);
-    }
-    if (exists)
-    {
-        // The -z time comparison with a local file, only works if the local file does exist.
-        args.push_back("-z");
-        args.push_back(local_file);
-    }
-    args.push_back("-o");
-    args.push_back(local_file);
-    args.push_back(url);
-
-    string curl = "curl";
-
-    string cmd = curl+" ";
-    for (auto a : args) cmd += a+" ";
-
-    verbose("(driver) checking %s\n", url);
-
-    string out;
-    invokeShellCaptureOutput(curl, args, {}, &out, true);
-    char *endptr = NULL;
-    long code = strtol(out.c_str(),  &endptr, 10);
-
-    if (endptr != NULL && *endptr == 0)
-    {
-        // Code is valid and it was decoded properly.
-        return code;
-    }
-
-    warning("wmbusmeters: failed to fetch %s using this command: %s\n", suffix, cmd.c_str());
-
-    return -1;
 }

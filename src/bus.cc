@@ -26,6 +26,9 @@
 #include"util.h"
 #include"wmbus.h"
 
+#include"utils/alarm.h"
+#include"utils/fs.h"
+
 #include <assert.h>
 #include <algorithm>
 #include <fcntl.h>
@@ -426,6 +429,7 @@ void BusManager::detectAndConfigureWmbusDevices(Configuration *config, Detection
             detected.setAsFound("", DEVICE_SOCKET, 0, false, lms);
             specified_device.handled = true;
             openBusDeviceAndPotentiallySetLinkmodes(config, "config", &detected);
+            forceLoadAllDrivers(config);
             continue;
         }
         if (specified_device.file == "" && specified_device.command == "" && specified_device.hex == "")

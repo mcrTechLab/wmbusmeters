@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2022 Fredrik Öhrström (gpl-3.0-or-later)
+ Copyright (C) 2026 Aras Abbasi (gpl-3.0-or-later)
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -15,17 +15,24 @@
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef CRC16_H_
-#define CRC16_H_
+#include"benchmark.h"
+#include"util.h"
 
-#include "always.h"
-#include <cstdint>
-#include <cstddef>
+#include<string>
 
-uint16_t crc16_EN13757(uchar *data, size_t len);
+using namespace std;
 
-// This crc is used by im871a for its serial communication.
-uint16_t crc16_CCITT(uchar *data, uint16_t length);
-bool     crc16_CCITT_check(uchar *data, uint16_t length);
+int main(int argc, char **argv)
+{
+    // String functions are heavier, so default to fewer iterations.
+    int64_t n = benchmark::iterations(argc, argv, 1LL*1000*1000);
 
-#endif
+    string hexstr = "2E44934415112233038C209F255900000000000000000000";
+    bool invalid = false;
+
+    benchmark::run("isHexStringFlex", n, [&](int64_t) -> uint64_t {
+        return isHexStringFlex(hexstr, &invalid) ? 1 : 0;
+    });
+
+    return 0;
+}

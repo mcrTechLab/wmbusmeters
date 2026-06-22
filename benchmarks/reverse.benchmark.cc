@@ -1,5 +1,5 @@
 /*
- Copyright (C) 2020 Fredrik Öhrström (gpl-3.0-or-later)
+ Copyright (C) 2026 Aras Abbasi (gpl-3.0-or-later)
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -15,11 +15,18 @@
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef _AESCMAC_H_
-#define _AESCMAC_H_
+#include"benchmark.h"
+#include"util.h"
 
-typedef unsigned char uchar;
+using namespace std;
 
-void AES_CMAC (uchar *key, uchar *input, int length, uchar *mac);
+int main(int argc, char **argv)
+{
+    int64_t n = benchmark::iterations(argc, argv, 50LL*1000*1000);
 
-#endif //_AESCMAC_H_
+    benchmark::run("reverse", n, [&](int64_t i) -> uint64_t {
+        return reverse((uchar)(i & 0xff));
+    });
+
+    return 0;
+}

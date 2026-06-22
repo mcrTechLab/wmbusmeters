@@ -2,7 +2,7 @@
 driver {
     name           = op041a
     meter_type     = WaterMeter
-    default_fields = name,id,total_m3,meter_datetime,timestamp
+    default_fields = name,id,status_counter,total_m3,meter_datetime,timestamp
     manufacturer   = Apator
     model          = op041a
     detect {
@@ -12,13 +12,46 @@ driver {
         use = total_m3
         use = meter_datetime
     }
+    fields {
+        field {
+            name                 = mfct_status_decoder
+            quantity             = Text
+            attributes           = HIDE
+            match_entire_payload = true
+            ixml                 = "decode = -byte, -byte, -byte, -byte, -byte, -byte,
+                                            -byte, -byte, -byte, -byte, -byte, -byte,
+                                            -'0F', -'60', status_bytes, rest.
+                                    status_bytes = byte, byte, byte, @DV_mfct_status_raw.
+                                    rest = byte*.
+                                    -hex  = ['A'-'F';'0'-'9'].
+                                    -byte = hex, hex.
+                                    DV_mfct_status_raw>dvk = +'03FB10'."
+        }
+        field {
+            name           = status
+            quantity       = Dimensionless
+            info           = 'Status flags from manufacturer payload (raw 24-bit value).'
+            vif_scaling    = None
+            dif_signedness = Unsigned
+            match {
+                difvifkey = 03FB10
+            }
+        }
+    }
     tests {
         test {
             args     = 'W op041a 11337834 NOKEY'
-            comment  = ''
+            comment  = 'Status bytes 00 00 00 yields 0.'
             telegram = 41440106347833111A078CC0A27AAB0030852F2F_04132F010000046D332E46320F60000000000869970743F13B375F3124000000240000002F2F2F2F2F2F2F2F2F2F
-            json     = '{"_":"telegram","media":"water","meter":"op041a","name":"W","id":"11337834","total_m3":0.303,"meter_datetime":"2026-02-06 14:51","timestamp":"1111-11-11T11:11:11Z"}'
-            fields   = 'W;11337834;0.303;2026-02-06 14:51;1111-11-11 11:11.11'
+            json     = '{"_":"telegram","media":"water","meter":"op041a","name":"W","id":"11337834","status_counter":0,"total_m3":0.303,"meter_datetime":"2026-02-06 14:51","timestamp":"1111-11-11T11:11:11Z"}'
+            fields   = 'W;11337834;0;0.303;2026-02-06 14:51;1111-11-11 11:11.11'
+        }
+        test {
+            args     = 'W2 op041a 11105737 003E3FB67CB3D40CF5F0FF55BBC46457'
+            comment  = 'Status bytes 08 82 80 = 0x808208 = 8421896 decimal.'
+            telegram = 61440106375710111A078CC09E7A6D7050853DC1179DAF3FAB17186F511F1B87ABB3436353832454BE12E9E9F99C9654BB6441E35F1D464920EBDAFFC42A39FAD30E1DA05C1F382DA58AADC3B5D1210CE068DD2C9CC14F0BEF815A4298792283F970
+            json     = '{"_":"telegram","media":"water","meter":"op041a","name":"W2","id":"11105737","status_counter":8421896,"total_m3":0.042,"meter_datetime":"2026-06-16 07:13","timestamp":"1111-11-11T11:11:11Z"}'
+            fields   = 'W2;11105737;8421896;0.042;2026-06-16 07:13;1111-11-11 11:11.11'
         }
     }
 }

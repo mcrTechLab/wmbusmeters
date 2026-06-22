@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug wmbusmeters",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/wmbusmeters",
+            "args": ["--analyze", "4A446850362297256A087AE6..."],
+            "cwd": "${workspaceFolder}",
+            "MIMode": "lldb"
+        }
+    ]
+}

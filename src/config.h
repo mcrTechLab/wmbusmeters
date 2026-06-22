@@ -21,7 +21,6 @@
 #include"always.h"
 #include"log.h"
 #include"units.h"
-#include"util.h"
 #include"wmbus.h"
 #include"meters.h"
 #include<set>
@@ -56,7 +55,7 @@ struct ConfigOverrides
     std::string exitafter_override;
     std::string oneshot_override;
     std::string logfile_override;
-    std::string listmeters_override;
+    std::string listdrivers_override;
     std::string listfields_override;
 };
 
@@ -113,10 +112,10 @@ struct Configuration
     bool exit_instead_of_alarm_ {};
     bool list_shell_envs {};
     bool list_fields {};
-    bool list_meters {}; // Should be renamed to drivers.
+    bool list_drivers {};
     bool print_driver {};
     bool list_units {};
-    std::string list_meters_search;
+    std::string list_drivers_search;
     // When asking for envs or fields, this is the meter type to list for.
     std::string list_meter;
     bool oneshot {};

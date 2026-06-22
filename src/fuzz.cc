@@ -21,6 +21,7 @@
 #include"util.h"
 #include"wmbus.h"
 #include"dvparser.h"
+#include"utils/fs.h"
 
 #include<unistd.h>
 
@@ -48,7 +49,7 @@ int main(int argc, char **argv)
         }
     }
 
-    map<string,pair<int,DVEntry>> dv_entries;
+    unordered_map<string,pair<int,DVEntry>> dv_entries;
 
     Telegram t;
     vector<uchar>::iterator i = databytes.begin();
